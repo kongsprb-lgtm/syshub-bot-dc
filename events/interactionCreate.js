@@ -20,12 +20,11 @@ module.exports = {
         // --- HANDLE BUTTONS ---
         if (interaction.isButton()) {
             const { customId, guild, user, channel } = interaction;
+            const logChannel = guild.channels.cache.get(process.env.TICKET_LOG_CHANNEL_ID);
 
             // 1. OPEN TICKET
             if (customId === 'open_midman_ticket') {
                 const ticketName = `midman-${user.username}`;
-                
-                // Check if already has a ticket
                 const existingTicket = guild.channels.cache.find(c => c.name === ticketName.toLowerCase());
                 if (existingTicket) return interaction.reply({ content: `You already have an open ticket: ${existingTicket}`, ephemeral: true });
 
@@ -54,6 +53,19 @@ module.exports = {
 
                 await ticketChannel.send({ content: `${user} | <@&${process.env.MIDMAN_STAFF_ID}>`, embeds: [embed], components: [row] });
                 await interaction.reply({ content: `Ticket created: ${ticketChannel}`, ephemeral: true });
+
+                // LOG
+                if (logChannel) {
+                    const logEmbed = new EmbedBuilder()
+                        .setTitle('🎫 Ticket Opened')
+                        .setColor('#57F287')
+                        .addFields(
+                            { name: 'User', value: `${user} (${user.id})`, inline: true },
+                            { name: 'Channel', value: `${ticketChannel.name}`, inline: true }
+                        )
+                        .setTimestamp();
+                    logChannel.send({ embeds: [logEmbed] });
+                }
             }
 
             // 2. CLAIM TICKET
@@ -61,26 +73,66 @@ module.exports = {
                 if (!interaction.member.roles.cache.has(process.env.MIDMAN_STAFF_ID) && interaction.user.id !== process.env.MIDMAN_STAFF_ID) {
                     return interaction.reply({ content: 'Only staff can claim tickets!', ephemeral: true });
                 }
-                await interaction.reply({ content: `This ticket has been claimed by ${user}!` });
-                interaction.message.edit({ components: [] }); // Remove buttons after claim or keep them? Let's keep Close/Cancel.
                 
+                await interaction.reply({ content: `This ticket has been claimed by ${user}!` });
                 const newRow = new ActionRowBuilder()
                     .addComponents(
                         new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
                         new ButtonBuilder().setCustomId('cancel_ticket').setLabel('Cancel').setStyle(ButtonStyle.Secondary).setEmoji('✖️'),
                     );
                 await interaction.message.edit({ components: [newRow] });
+
+                // LOG
+                if (logChannel) {
+                    const logEmbed = new EmbedBuilder()
+                        .setTitle('📌 Ticket Claimed')
+                        .setColor('#FEE75C')
+                        .addFields(
+                            { name: 'Staff', value: `${user} (${user.id})`, inline: true },
+                            { name: 'Channel', value: `${channel.name}`, inline: true }
+                        )
+                        .setTimestamp();
+                    logChannel.send({ embeds: [logEmbed] });
+                }
             }
 
             // 3. CLOSE TICKET
             if (customId === 'close_ticket') {
                 await interaction.reply('Closing ticket in 5 seconds...');
+                
+                // LOG
+                if (logChannel) {
+                    const logEmbed = new EmbedBuilder()
+                        .setTitle('🔒 Ticket Closed')
+                        .setColor('#ED4245')
+                        .addFields(
+                            { name: 'By', value: `${user} (${user.id})`, inline: true },
+                            { name: 'Channel', value: `${channel.name}`, inline: true }
+                        )
+                        .setTimestamp();
+                    logChannel.send({ embeds: [logEmbed] });
+                }
+
                 setTimeout(() => channel.delete(), 5000);
             }
 
             // 4. CANCEL TICKET
             if (customId === 'cancel_ticket') {
                 await interaction.reply('Transaction cancelled. Deleting channel...');
+                
+                // LOG
+                if (logChannel) {
+                    const logEmbed = new EmbedBuilder()
+                        .setTitle('✖️ Ticket Cancelled')
+                        .setColor('#95A5A6')
+                        .addFields(
+                            { name: 'By', value: `${user} (${user.id})`, inline: true },
+                            { name: 'Channel', value: `${channel.name}`, inline: true }
+                        )
+                        .setTimestamp();
+                    logChannel.send({ embeds: [logEmbed] });
+                }
+
                 setTimeout(() => channel.delete(), 2000);
             }
         }
