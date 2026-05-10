@@ -1,8 +1,11 @@
 const { Events, EmbedBuilder } = require('discord.js');
+const { updateStats } = require('../utils/statsManager');
 
 module.exports = {
     name: Events.GuildMemberRemove,
     async execute(member) {
+        // Update stats
+        updateStats(member.client);
         console.log(`Member left: ${member.user.tag} from guild: ${member.guild.id}`);
 
         if (member.guild.id !== process.env.GUILD_ID) {

@@ -1,8 +1,11 @@
 const { Events, EmbedBuilder } = require('discord.js');
+const { updateStats } = require('../utils/statsManager');
 
 module.exports = {
     name: Events.GuildMemberAdd,
     async execute(member) {
+        // Update stats
+        updateStats(member.client);
         console.log(`New member detected: ${member.user.tag} in guild: ${member.guild.id}`);
         
         if (member.guild.id !== process.env.GUILD_ID) {
