@@ -19,8 +19,9 @@ module.exports = {
 
         // --- HANDLE BUTTONS ---
         if (interaction.isButton()) {
-            const { customId, guild, user, channel } = interaction;
+            const { customId, guild, user, channel, member } = interaction;
             const logChannel = guild.channels.cache.get(process.env.TICKET_LOG_CHANNEL_ID);
+            const staffId = process.env.MIDMAN_STAFF_ID;
 
             // 1. OPEN TICKET
             if (customId === 'open_midman_ticket') {
@@ -34,82 +35,66 @@ module.exports = {
                     permissionOverwrites: [
                         { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
                         { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
-                        { id: process.env.MIDMAN_STAFF_ID, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+                        { id: staffId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
                     ],
                 });
 
                 const embed = new EmbedBuilder()
                     .setTitle('🤝 New Midman Ticket')
                     .setColor('#5865F2')
-                    .setDescription(`Welcome ${user}!\nPlease describe your transaction details.\nStaff <@&${process.env.MIDMAN_STAFF_ID}> will assist you soon.`)
+                    .setDescription(`Welcome ${user}!\nPlease describe your transaction details.\n\n**Staff <@&${staffId}> must claim this ticket first.**`)
                     .setTimestamp();
 
                 const row = new ActionRowBuilder()
                     .addComponents(
-                        new ButtonBuilder().setCustomId('claim_ticket').setLabel('Claim').setStyle(ButtonStyle.Success).setEmoji('✅'),
-                        new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
-                        new ButtonBuilder().setCustomId('cancel_ticket').setLabel('Cancel').setStyle(ButtonStyle.Secondary).setEmoji('✖️'),
+                        new ButtonBuilder().setCustomId('claim_ticket').setLabel('Claim Ticket').setStyle(ButtonStyle.Success).setEmoji('✅'),
                     );
 
-                await ticketChannel.send({ content: `${user} | <@&${process.env.MIDMAN_STAFF_ID}>`, embeds: [embed], components: [row] });
+                await ticketChannel.send({ content: `${user} | <@&${staffId}>`, embeds: [embed], components: [row] });
                 await interaction.reply({ content: `Ticket created: ${ticketChannel}`, ephemeral: true });
 
-                // LOG
                 if (logChannel) {
-                    const logEmbed = new EmbedBuilder()
-                        .setTitle('🎫 Ticket Opened')
-                        .setColor('#57F287')
-                        .addFields(
-                            { name: 'User', value: `${user} (${user.id})`, inline: true },
-                            { name: 'Channel', value: `${ticketChannel.name}`, inline: true }
-                        )
-                        .setTimestamp();
+                    const logEmbed = new EmbedBuilder().setTitle('🎫 Ticket Opened').setColor('#57F287').addFields({ name: 'User', value: `${user} (${user.id})`, inline: true }, { name: 'Channel', value: `${ticketChannel.name}`, inline: true }).setTimestamp();
                     logChannel.send({ embeds: [logEmbed] });
                 }
             }
 
             // 2. CLAIM TICKET
             if (customId === 'claim_ticket') {
-                if (!interaction.member.roles.cache.has(process.env.MIDMAN_STAFF_ID) && interaction.user.id !== process.env.MIDMAN_STAFF_ID) {
+                if (!member.roles.cache.has(staffId) && user.id !== staffId) {
                     return interaction.reply({ content: 'Only staff can claim tickets!', ephemeral: true });
                 }
                 
-                await interaction.reply({ content: `This ticket has been claimed by ${user}!` });
-                const newRow = new ActionRowBuilder()
+                const claimEmbed = new EmbedBuilder()
+                    .setTitle('📌 Ticket Claimed')
+                    .setColor('#FEE75C')
+                    .setDescription(`This ticket has been claimed by ${user}.\nStaff will assist you now.`)
+                    .setTimestamp();
+
+                const row = new ActionRowBuilder()
                     .addComponents(
                         new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
                         new ButtonBuilder().setCustomId('cancel_ticket').setLabel('Cancel').setStyle(ButtonStyle.Secondary).setEmoji('✖️'),
                     );
-                await interaction.message.edit({ components: [newRow] });
 
-                // LOG
+                await interaction.update({ embeds: [claimEmbed], components: [row] });
+
                 if (logChannel) {
-                    const logEmbed = new EmbedBuilder()
-                        .setTitle('📌 Ticket Claimed')
-                        .setColor('#FEE75C')
-                        .addFields(
-                            { name: 'Staff', value: `${user} (${user.id})`, inline: true },
-                            { name: 'Channel', value: `${channel.name}`, inline: true }
-                        )
-                        .setTimestamp();
+                    const logEmbed = new EmbedBuilder().setTitle('📌 Ticket Claimed').setColor('#FEE75C').addFields({ name: 'Staff', value: `${user} (${user.id})`, inline: true }, { name: 'Channel', value: `${channel.name}`, inline: true }).setTimestamp();
                     logChannel.send({ embeds: [logEmbed] });
                 }
             }
 
             // 3. CLOSE TICKET
             if (customId === 'close_ticket') {
+                if (!member.roles.cache.has(staffId) && user.id !== staffId) {
+                    return interaction.reply({ content: 'Only staff can close tickets!', ephemeral: true });
+                }
+
                 await interaction.reply('Closing ticket in 5 seconds...');
                 
-                // LOG
                 if (logChannel) {
-                    const logEmbed = new EmbedBuilder()
-                        .setTitle('🔒 Ticket Closed')
-                        .setColor('#ED4245')
-                        .addFields(
-                            { name: 'By', value: `${user} (${user.id})`, inline: true },
-                            { name: 'Channel', value: `${channel.name}`, inline: true }
-                        )
-                        .setTimestamp();
+                    const logEmbed = new EmbedBuilder().setTitle('🔒 Ticket Closed').setColor('#ED4245').addFields({ name: 'By', value: `${user} (${user.id})`, inline: true }, { name: 'Channel', value: `${channel.name}`, inline: true }).setTimestamp();
                     logChannel.send({ embeds: [logEmbed] });
                 }
 
@@ -118,18 +103,14 @@ module.exports = {
 
             // 4. CANCEL TICKET
             if (customId === 'cancel_ticket') {
+                if (!member.roles.cache.has(staffId) && user.id !== staffId) {
+                    return interaction.reply({ content: 'Only staff can cancel tickets!', ephemeral: true });
+                }
+
                 await interaction.reply('Transaction cancelled. Deleting channel...');
                 
-                // LOG
                 if (logChannel) {
-                    const logEmbed = new EmbedBuilder()
-                        .setTitle('✖️ Ticket Cancelled')
-                        .setColor('#95A5A6')
-                        .addFields(
-                            { name: 'By', value: `${user} (${user.id})`, inline: true },
-                            { name: 'Channel', value: `${channel.name}`, inline: true }
-                        )
-                        .setTimestamp();
+                    const logEmbed = new EmbedBuilder().setTitle('✖️ Ticket Cancelled').setColor('#95A5A6').addFields({ name: 'By', value: `${user} (${user.id})`, inline: true }, { name: 'Channel', value: `${channel.name}`, inline: true }).setTimestamp();
                     logChannel.send({ embeds: [logEmbed] });
                 }
 
