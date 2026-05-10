@@ -3,10 +3,18 @@ const { Events, EmbedBuilder } = require('discord.js');
 module.exports = {
     name: Events.GuildMemberRemove,
     async execute(member) {
-        if (member.guild.id !== process.env.GUILD_ID) return;
+        console.log(`Member left: ${member.user.tag} from guild: ${member.guild.id}`);
+
+        if (member.guild.id !== process.env.GUILD_ID) {
+            console.log(`Guild ID mismatch (Leave). Expected: ${process.env.GUILD_ID}, Got: ${member.guild.id}`);
+            return;
+        }
 
         const channel = member.guild.channels.cache.get(process.env.WELCOME_CHANNEL_ID);
-        if (!channel) return;
+        if (!channel) {
+            console.log(`Channel not found in cache (Leave): ${process.env.WELCOME_CHANNEL_ID}`);
+            return;
+        }
 
         const goodbyeEmbed = new EmbedBuilder()
             .setColor('#ED4245')
