@@ -9,12 +9,15 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessageReactions,
     ],
 });
 
 client.commands = new Collection();
+client.prefixCommands = new Collection();
+client.prefixes = ['sys', 'syshub', 'sh', '.', '?', '!'];
 
-// Command Handler
+// Slash Command Handler
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
     const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
@@ -25,6 +28,16 @@ if (fs.existsSync(commandsPath)) {
             client.commands.set(command.data.name, command);
         }
     }
+}
+
+// Prefix Command Handler
+const prefixCommandsPath = path.join(__dirname, 'prefix_commands');
+if (!fs.existsSync(prefixCommandsPath)) fs.mkdirSync(prefixCommandsPath);
+const prefixFiles = fs.readdirSync(prefixCommandsPath).filter(file => file.endsWith('.js'));
+for (const file of prefixFiles) {
+    const filePath = path.join(prefixCommandsPath, file);
+    const command = require(filePath);
+    client.prefixCommands.set(command.name, command);
 }
 
 // Event Handler
