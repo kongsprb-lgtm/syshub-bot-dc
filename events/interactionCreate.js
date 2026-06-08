@@ -47,10 +47,18 @@ module.exports = {
                     .setPlaceholder('Contoh: 150000 atau 150k')
                     .setRequired(true);
 
+                const lawanInput = new TextInputBuilder()
+                    .setCustomId('lawan_transaksi')
+                    .setLabel('Lawan Transaksi (Username/ID)')
+                    .setStyle(TextInputStyle.Short)
+                    .setPlaceholder('Tag atau ketik username penjual/pembeli')
+                    .setRequired(true);
+
                 const firstRow = new ActionRowBuilder().addComponents(jenisInput);
                 const secondRow = new ActionRowBuilder().addComponents(hargaInput);
+                const thirdRow = new ActionRowBuilder().addComponents(lawanInput);
 
-                modal.addComponents(firstRow, secondRow);
+                modal.addComponents(firstRow, secondRow, thirdRow);
 
                 await interaction.showModal(modal);
             }
@@ -123,6 +131,7 @@ module.exports = {
             if (customId === 'midman_modal') {
                 const jenisMidman = interaction.fields.getTextInputValue('jenis_midman');
                 const jumlahHargaStr = interaction.fields.getTextInputValue('jumlah_harga');
+                const lawanInputStr = interaction.fields.getTextInputValue('lawan_transaksi');
 
                 // Price parser helper
                 const parsePrice = (input) => {
@@ -164,23 +173,63 @@ module.exports = {
 
                 await interaction.deferReply({ ephemeral: true });
 
+                // Try to resolve opponent (second person)
+                let secondPerson = null;
+                let cleanLawan = lawanInputStr.replace(/[<@!>]/g, '').trim();
+                
+                if (/^\d+$/.test(cleanLawan)) {
+                    try {
+                        secondPerson = await guild.members.fetch(cleanLawan);
+                    } catch (e) {}
+                }
+
+                if (!secondPerson) {
+                    secondPerson = guild.members.cache.find(m => 
+                        m.user.username.toLowerCase() === lawanInputStr.toLowerCase() ||
+                        m.user.tag.toLowerCase() === lawanInputStr.toLowerCase()
+                    );
+                }
+
+                if (!secondPerson) {
+                    try {
+                        const searchResults = await guild.members.fetch({ query: lawanInputStr, limit: 1 });
+                        secondPerson = searchResults.first();
+                    } catch (e) {}
+                }
+
+                let lawanInstruction = '';
+                let pingContent = `${user} | <@&${staffId}>`;
+                
+                const permissionOverwrites = [
+                    { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                    { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
+                    { id: staffId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+                ];
+
+                if (secondPerson) {
+                    permissionOverwrites.push({
+                        id: secondPerson.id,
+                        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles]
+                    });
+                    lawanInstruction = `✅ **Lawan Transaksi:** ${secondPerson} berhasil ditambahkan ke tiket secara otomatis.`;
+                    pingContent = `${user} | ${secondPerson} | <@&${staffId}>`;
+                } else {
+                    lawanInstruction = `⚠️ **Lawan Transaksi tidak terdeteksi otomatis:** \`${lawanInputStr}\`\n👉 *Silakan tag atau sebutkan username/ID si penjual/pembeli tersebut di sini agar staff dapat menambahkannya.*`;
+                }
+
                 try {
                     const ticketChannel = await guild.channels.create({
                         name: ticketName,
                         type: ChannelType.GuildText,
-                        permissionOverwrites: [
-                            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-                            { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
-                            { id: staffId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
-                        ],
+                        permissionOverwrites,
                     });
 
                     const embed = new EmbedBuilder()
                         .setTitle('🤝 New Midman Ticket')
                         .setColor('#5865F2')
-                        .setDescription(`Welcome ${user}!\nPlease describe your transaction details.\n\n**Staff <@&${staffId}> must claim this ticket first.**`)
+                        .setDescription(`Welcome ${user}!\nPlease describe your transaction details.\n\n${lawanInstruction}\n\n**Staff <@&${staffId}> must claim this ticket first.**`)
                         .addFields(
-                            { name: '📋 Form Transaksi', value: `**Jenis Midman:** ${jenisMidman}\n**Jumlah Harga:** ${jumlahHargaStr}` },
+                            { name: '📋 Form Transaksi', value: `**Jenis Midman:** ${jenisMidman}\n**Jumlah Harga:** ${jumlahHargaStr}\n**Lawan Transaksi:** ${secondPerson ? `${secondPerson} (${secondPerson.user.tag})` : `\`${lawanInputStr}\``}` },
                             { name: '💰 Rincian Biaya (Tax)', value: `**Harga Asli:** ${formatCurrency(priceVal)}\n**Pajak Midman (${taxPercentage}%):** ${formatCurrency(taxAmount)}\n**Total yang harus dibayar:** ${formatCurrency(totalAmount)}` }
                         )
                         .setFooter({ text: 'SysHub Middleman System' })
@@ -191,7 +240,7 @@ module.exports = {
                             new ButtonBuilder().setCustomId('claim_ticket').setLabel('Claim Ticket').setStyle(ButtonStyle.Success).setEmoji('✅'),
                         );
 
-                    await ticketChannel.send({ content: `${user} | <@&${staffId}>`, embeds: [embed], components: [row] });
+                    await ticketChannel.send({ content: pingContent, embeds: [embed], components: [row] });
                     await interaction.editReply({ content: `Ticket created: ${ticketChannel}` });
 
                     if (logChannel) {
@@ -204,7 +253,8 @@ module.exports = {
                                 { name: 'Jenis Midman', value: jenisMidman, inline: true },
                                 { name: 'Harga', value: formatCurrency(priceVal), inline: true },
                                 { name: 'Pajak', value: `${formatCurrency(taxAmount)} (${taxPercentage}%)`, inline: true },
-                                { name: 'Total', value: formatCurrency(totalAmount), inline: true }
+                                { name: 'Total', value: formatCurrency(totalAmount), inline: true },
+                                { name: 'Lawan Transaksi', value: secondPerson ? `${secondPerson.user.tag} (${secondPerson.id})` : lawanInputStr, inline: true }
                             )
                             .setTimestamp();
                         logChannel.send({ embeds: [logEmbed] });
