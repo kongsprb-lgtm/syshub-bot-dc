@@ -157,7 +157,7 @@ module.exports = {
                 };
 
                 const priceVal = parsePrice(jumlahHargaStr);
-                const taxPercentage = priceVal < 200000 ? 5 : 10;
+                const taxPercentage = priceVal < 200000 ? 10 : 5;
                 const taxAmount = Math.round(priceVal * (taxPercentage / 100));
                 const totalAmount = priceVal + taxAmount;
 
