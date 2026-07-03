@@ -1,8 +1,17 @@
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
 
-const updateStats = async (client) => {
+let updateTimeout = null;
+let isUpdating = false;
+
+const runUpdate = async (client) => {
+    if (isUpdating) return;
+    isUpdating = true;
+
     const guild = client.guilds.cache.get(process.env.GUILD_ID);
-    if (!guild) return;
+    if (!guild) {
+        isUpdating = false;
+        return;
+    }
 
     try {
         // 1. Get or Create Category
@@ -59,7 +68,29 @@ const updateStats = async (client) => {
         console.log('Server stats updated and channels ensured.');
     } catch (error) {
         console.error('Error updating server stats:', error);
+    } finally {
+        isUpdating = false;
     }
+};
+
+const updateStats = async (client, force = false) => {
+    if (force) {
+        if (updateTimeout) {
+            clearTimeout(updateTimeout);
+            updateTimeout = null;
+        }
+        await runUpdate(client);
+        return;
+    }
+
+    if (updateTimeout) {
+        clearTimeout(updateTimeout);
+    }
+
+    updateTimeout = setTimeout(async () => {
+        updateTimeout = null;
+        await runUpdate(client);
+    }, 5000); // 5 seconds debounce for responsive real-time updates
 };
 
 module.exports = { updateStats };

@@ -7,8 +7,8 @@ module.exports = {
     async execute(client) {
         console.log(`Ready! Logged in as ${client.user.tag}`);
         
-        // Initial update
-        await updateStats(client);
+        // Initial update (forced immediate run)
+        await updateStats(client, true);
 
         // Update every 10 minutes (to avoid rate limits)
         setInterval(() => {
