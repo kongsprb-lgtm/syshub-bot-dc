@@ -29,6 +29,9 @@ const runUpdate = async (client) => {
             });
         }
 
+        // Fetch all members to ensure role member cache is fully accurate
+        await guild.members.fetch();
+
         // Stats Data
         const allMembersCount = guild.memberCount.toLocaleString();
         const channelsCount = guild.channels.cache.size.toLocaleString();
